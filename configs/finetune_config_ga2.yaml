@@ -708,7 +708,7 @@ modes:
     run_id: "neuro_vla"
     framework_name: "NeuroVLA"
     base_vlm: "Qwen2.5-VL-3B-Instruct"
-    data_root: "${LIBERO_DATA_ROOT}"
+    data_root: "${LEROBOT_LIBERO_DATA_DIR}"
     dataset_mix: "libero_goal"
     training:
       per_device_batch_size: 8
@@ -749,7 +749,7 @@ modes:
     run_id: "neurovla_stdp_libero"
     framework_name: "NeuroVLA"
     base_vlm: "Qwen2.5-VL-3B-Instruct"
-    data_root: "${LIBERO_DATA_ROOT}"
+    data_root: "${LEROBOT_LIBERO_DATA_DIR}"
     dataset_mix: "libero_goal"
     training:
       per_device_batch_size: 16

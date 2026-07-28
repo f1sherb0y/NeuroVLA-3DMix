@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.distributed as dist
 
 
 class CrossAttentionBlock(nn.Module):
@@ -82,7 +80,7 @@ class LayerwiseQFormer(nn.Module):
             - Asserts len(hidden_states_list) == num_layers.
             - Does not modify gradient flow of hidden_states_list.
         """
-        # hidden_states_list = self.scale_hook(hidden_states_list)
+        hidden_states_list = self.scale_hook(hidden_states_list)
 
         assert (
             len(hidden_states_list) == self.num_layers
@@ -108,45 +106,31 @@ class LayerwiseQFormer(nn.Module):
 
     def scale_hook(self, hidden_states_list, scale_factor=0.1):
         """
-        (Experimental / optional) Register gradient scaling hooks on each layer's hidden states.
+        Scale gradients flowing into each selected VLM hidden state.
         Args:
             hidden_states_list (List[Tensor]): Per-layer feature tensors.
             scale_factor (float): Gradient scaling factor (effective only if enabled via config and != 1).
         Returns:
-            List[Tensor]: Original list (no data copy); hooks may be attached in-place.
+            List[Tensor]: Tensors with unchanged forward values and scaled gradients.
         Design:
-            - Currently returns immediately (guard condition hard-coded False) as a placeholder.
-            - Uses attribute _scaled_hook to avoid duplicate hook registration in distributed settings.
-            - Can be enabled later for gradient dampening or perturbation experiments.
-        Performance:
-            - Excessive hook registrations can hurt speed; kept lazy by default.
+            - Uses a detach-based identity so it does not accumulate tensor hooks.
         """
-        # --- 1. Register gradient scaling hooks on input hidden_states_list ---
         if (
             self.config
-            and hasattr(self.config.vla, "layer_qformer")
-            and hasattr(self.config.vla.layer_qformer, "grad_scale")
-            and self.config.vla.layer_qformer.grad_scale != 1
+            and hasattr(self.config.framework, "layer_qformer")
+            and hasattr(self.config.framework.layer_qformer, "grad_scale")
+            and self.config.framework.layer_qformer.grad_scale != 1
         ):
-            scale_factor = self.config.vla.layer_qformer.grad_scale
+            scale_factor = float(self.config.framework.layer_qformer.grad_scale)
         else:
             return hidden_states_list  # If grad_scale is not configured, return the original list
 
-        scaled_hidden_states_list = []
-        for hidden_states in hidden_states_list:
-            if hidden_states.requires_grad:
-                # Ensure gradient scaling is executed only once in distributed settings
-                if not hasattr(hidden_states, "_scaled_hook"):  # Prevent duplicate registration --> Seems to accelerate
-                    hook = lambda grad: grad * scale_factor
-                    hidden_states.register_hook(hook)
-                    hidden_states._scaled_hook = True  # Mark as processed
-            scaled_hidden_states_list.append(hidden_states)
-
-        return hidden_states_list
-
-
-import torch
-import torch.nn as nn
+        # Preserve the forward values while scaling only the gradient flowing
+        # back into the selected VLM hidden states.
+        return [
+            hidden_states * scale_factor + hidden_states.detach() * (1.0 - scale_factor)
+            for hidden_states in hidden_states_list
+        ]
 
 
 def get_layerwise_qformer(num_heads=8, config=None, **kwargs):
@@ -158,7 +142,8 @@ def get_layerwise_qformer(num_heads=8, config=None, **kwargs):
             - qformer_start_layer / qformer_end_layer: range of layers (start inclusive, end exclusive).
             - num_query_tokens: Number of learnable query tokens.
             - input_dim: Input feature dimension (Din).
-            - ouptput_dim: Output feature dimension (Dout).
+            - output_dim: Output feature dimension (Dout). The legacy typo
+              ``ouptput_dim`` is accepted for saved checkpoint configs.
         **kwargs: Reserved for future extensions (unused).
     Returns:
         LayerwiseQFormer: Instantiated model.
@@ -166,12 +151,12 @@ def get_layerwise_qformer(num_heads=8, config=None, **kwargs):
         - num_layers = end_layer - start_layer (half-open interval).
         - Does not perform weight loading or device moves here.
     """
-    # dist.barrier()
     qformer_cfg = config.framework.layer_qformer
-    num_layers = qformer_cfg.qformer_end_layer - qformer_cfg.qformer_start_layer if config else num_layers
-    num_query_tokens = qformer_cfg.num_query_tokens
-    input_hidden_dim = config.framework.layer_qformer.input_dim
-    output_hidden_dim = config.framework.layer_qformer.ouptput_dim
+    num_layers = qformer_cfg.qformer_end_layer - qformer_cfg.qformer_start_layer
+    input_hidden_dim = qformer_cfg.input_dim
+    output_hidden_dim = qformer_cfg.get("output_dim", qformer_cfg.get("ouptput_dim"))
+    if output_hidden_dim is None:
+        raise ValueError("framework.layer_qformer.output_dim is required")
     num_query_tokens = qformer_cfg.num_query_tokens
 
     qformer = LayerwiseQFormer(
