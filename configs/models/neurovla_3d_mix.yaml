@@ -19,9 +19,7 @@ framework:
     image_size: 518
     vggt_dim: 2048
     hidden_dim: 2048
-    # Paper-faithful default: retain every 37x37 patch from both LIBERO views
-    # (2738 geometry tokens total). Set 512 for a lower-memory 16x16/view run.
-    max_geometry_tokens: 0
+    initialize_vggt_from_checkpoint: false
   action_model:
     hidden_size: 1536
     edit_hidden_size: 256

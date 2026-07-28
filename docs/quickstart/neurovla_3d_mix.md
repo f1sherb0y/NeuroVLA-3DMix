@@ -22,11 +22,8 @@ For each cortical forward pass:
 4. The fused tokens are appended to the unmodified Qwen hidden sequence and
    consumed by the existing Q-Former.
 
-The paper-faithful default retains each view's full 37 x 37 VGGT grid, giving
-2738 geometry tokens for the two LIBERO views. If memory is constrained, set
-`framework.three_d_mix.max_geometry_tokens=512` to pool each view to 16 x 16;
-record that change when comparing against the baseline because it is an
-additional ablation.
+Each view keeps its full 37 x 37 VGGT grid, giving 2738 geometry tokens for the
+two LIBERO views.
 
 ## Server setup
 

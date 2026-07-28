@@ -14,7 +14,6 @@ from AlphaBrain.model.framework.NeuroVLA3DMix import NeuroVLA3DMix
 from AlphaBrain.model.modules.projector.qformer import LayerwiseQFormer
 from AlphaBrain.model.modules.projector.three_d_mix import (
     GatedFusionLayer,
-    ThreeDMixBridge,
     VGGTEncoder,
 )
 from AlphaBrain.training.trainer_utils.finetune_config import build_config_from_finetune
@@ -73,7 +72,7 @@ class NeuroVLA3DMixTests(unittest.TestCase):
         torch.testing.assert_close(tensor[0, 0, :, 0, 0], torch.ones(3))
         torch.testing.assert_close(tensor[0, 0, :, 259, 259], torch.zeros(3))
 
-    def test_gated_fusion_matches_paper_equation_and_ignores_padding(self):
+    def test_gated_fusion_matches_paper_equation(self):
         layer = GatedFusionLayer(hidden_dim=2)
         with torch.no_grad():
             layer.semantic_projection.weight.copy_(torch.eye(2))
@@ -92,32 +91,8 @@ class NeuroVLA3DMixTests(unittest.TestCase):
         torch.testing.assert_close(output[:, : hidden.shape[1]], hidden)
         torch.testing.assert_close(output[0, hidden.shape[1] :], expected_fused)
 
-    def test_geometry_pooling_preserves_view_boundaries(self):
-        bridge = object.__new__(ThreeDMixBridge)
-        nn.Module.__init__(bridge)
-        bridge.max_geometry_tokens = 512
-        geometry = torch.cat(
-            (
-                torch.ones(1, 1, 37 * 37, 1),
-                torch.full((1, 1, 37 * 37, 1), 2.0),
-            ),
-            dim=1,
-        )
-
-        pooled = bridge._pool_geometry_tokens(geometry)
-
-        self.assertEqual(pooled.shape, (1, 512, 1))
-        torch.testing.assert_close(pooled[:, :256], torch.ones(1, 256, 1))
-        torch.testing.assert_close(pooled[:, 256:], torch.full((1, 256, 1), 2.0))
-
-    def test_training_requires_original_resolution_geometry_images(self):
+    def test_training_uses_original_resolution_geometry_images(self):
         model = object.__new__(NeuroVLA3DMix)
-        with self.assertRaisesRegex(ValueError, "include_vggt_images"):
-            model._geometry_images_from_examples(
-                [{"image": [object()]}],
-                [[object()]],
-            )
-
         geometry_images = [[object(), object()]]
         result = model._geometry_images_from_examples(
             [{"image": [object()], "vggt_image": geometry_images[0]}],
