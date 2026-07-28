@@ -77,7 +77,9 @@ if [ "${CONDA_DEFAULT_ENV:-}" = "$ENV_NAME" ] && command -v hf >/dev/null 2>&1; 
     HF_CMD=(hf)
 elif command -v conda >/dev/null 2>&1 \
     && conda run -n "$ENV_NAME" hf --help >/dev/null 2>&1; then
-    HF_CMD=(conda run -n "$ENV_NAME" hf)
+    # Stream stdout/stderr directly so the multi-gigabyte download progress is
+    # visible instead of being buffered by `conda run` until completion.
+    HF_CMD=(conda run --no-capture-output -n "$ENV_NAME" hf)
 else
     echo "ERROR: cannot find the hf CLI in Conda environment: $ENV_NAME" >&2
     echo "Run: bash scripts/setup_neurovla_env.sh" >&2
@@ -92,6 +94,7 @@ DOWNLOAD_ARGS=(
     --max-workers "$MAX_WORKERS"
 )
 [ "$FORCE_DOWNLOAD" = true ] && DOWNLOAD_ARGS+=(--force-download)
+unset HF_HUB_DISABLE_PROGRESS_BARS
 "${HF_CMD[@]}" "${DOWNLOAD_ARGS[@]}"
 
 REQUIRED_FILES=(

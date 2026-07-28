@@ -92,6 +92,13 @@ class LiberoSetupTests(unittest.TestCase):
             self.assertIn(str(expected), result.stdout)
             self.assertFalse(expected.exists())
 
+    def test_checkpoint_download_streams_conda_output(self):
+        script = (
+            PROJECT_ROOT / "scripts" / "download_neurovla_checkpoint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("conda run --no-capture-output", script)
+        self.assertIn("unset HF_HUB_DISABLE_PROGRESS_BARS", script)
+
 
 if __name__ == "__main__":
     unittest.main()
