@@ -20,7 +20,8 @@ bash scripts/setup_neurovla_env.sh
 
 This creates/updates the `neurovla` Conda environment, checks out the pinned
 LIBERO revision under `third_party/LIBERO`, installs it without downgrading the
-training stack, and writes the non-interactive simulator config to `.libero/`.
+training stack, applies the required PyTorch 2.6 init-state compatibility patch,
+and writes the non-interactive simulator config to `.libero/`.
 Use `--simulator-smoke` to create and step one headless simulator without
 loading a policy checkpoint.
 

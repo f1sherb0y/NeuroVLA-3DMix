@@ -65,6 +65,8 @@ bash scripts/setup_neurovla_env.sh
 
 Do not install LIBERO's historical `requirements.txt` into `neurovla`; it pins
 old Transformers and NumPy versions that are incompatible with Qwen2.5-VL.
+The setup script also applies the required PyTorch 2.6 compatibility patch to
+LIBERO's trusted, pinned initial-state loader.
 
 ---
 

@@ -12,6 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class LiberoSetupTests(unittest.TestCase):
+    def test_pytorch_26_patch_changes_libero_init_state_loader(self):
+        patch = (PROJECT_ROOT / "patches" / "libero-pytorch-2.6.patch").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("torch.load(init_states_path, weights_only=False)", patch)
+
     def test_configure_libero_writes_noninteractive_config_and_env(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

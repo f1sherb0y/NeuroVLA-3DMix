@@ -10,6 +10,7 @@ ENV_NAME="${CONDA_ENV:-neurovla}"
 LIBERO_HOME="${LIBERO_HOME:-$PROJECT_ROOT/third_party/LIBERO}"
 LIBERO_REPOSITORY="${LIBERO_REPOSITORY:-https://github.com/Lifelong-Robot-Learning/LIBERO.git}"
 LIBERO_REVISION="${LIBERO_REVISION:-8f1084e3132a39270c3a13ebe37270a43ece2a01}"
+LIBERO_PATCH="$PROJECT_ROOT/patches/libero-pytorch-2.6.patch"
 MUJOCO_GL_BACKEND="${MUJOCO_GL:-egl}"
 SKIP_ENV_UPDATE=false
 RUN_SIMULATOR_SMOKE=false
@@ -81,6 +82,20 @@ else
         echo "Expected pinned revision $LIBERO_REVISION; use a fresh --libero-home path." >&2
         exit 1
     fi
+fi
+
+# LIBERO's pinned revision predates PyTorch 2.6, whose torch.load default changed
+# to weights_only=True. These official, pinned init-state files contain NumPy
+# objects and therefore require the legacy loader behavior.
+if git -C "$LIBERO_HOME" apply --check "$LIBERO_PATCH" 2>/dev/null; then
+    git -C "$LIBERO_HOME" apply "$LIBERO_PATCH"
+    echo "Applied LIBERO PyTorch 2.6 compatibility patch"
+elif git -C "$LIBERO_HOME" apply --reverse --check "$LIBERO_PATCH" 2>/dev/null; then
+    echo "LIBERO PyTorch 2.6 compatibility patch is already applied"
+else
+    echo "ERROR: cannot apply LIBERO compatibility patch: $LIBERO_PATCH" >&2
+    echo "Use a clean checkout at revision $LIBERO_REVISION." >&2
+    exit 1
 fi
 
 # Avoid robosuite's unbounded opencv-python dependency and LIBERO's obsolete
