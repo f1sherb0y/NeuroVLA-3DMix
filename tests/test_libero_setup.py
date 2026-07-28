@@ -61,6 +61,7 @@ class LiberoSetupTests(unittest.TestCase):
 
     def test_shell_scripts_parse(self):
         for relative_path in (
+            "scripts/download_neurovla_checkpoint.sh",
             "scripts/setup_neurovla_env.sh",
             "scripts/run_brain_inspired_scripts/run_eval_libero.sh",
         ):
@@ -69,6 +70,27 @@ class LiberoSetupTests(unittest.TestCase):
                 check=True,
                 env=os.environ.copy(),
             )
+
+    def test_checkpoint_download_dry_run_uses_home_models_without_writes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = os.environ.copy()
+            env["HOME"] = temp_dir
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(PROJECT_ROOT / "scripts" / "download_neurovla_checkpoint.sh"),
+                    "--dry-run",
+                ],
+                check=True,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+
+            expected = Path(temp_dir) / "models" / "neurovla-libero-all4suite"
+            self.assertIn("AlphaBrainGroup/neurovla-libero-all4suite", result.stdout)
+            self.assertIn(str(expected), result.stdout)
+            self.assertFalse(expected.exists())
 
 
 if __name__ == "__main__":

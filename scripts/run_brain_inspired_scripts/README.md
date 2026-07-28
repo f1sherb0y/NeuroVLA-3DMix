@@ -25,6 +25,15 @@ and writes the non-interactive simulator config to `.libero/`.
 Use `--simulator-smoke` to create and step one headless simulator without
 loading a policy checkpoint.
 
+Download the official self-contained NeuroVLA checkpoint (about 8.2 GB):
+
+```bash
+bash scripts/download_neurovla_checkpoint.sh
+```
+
+The checkpoint is stored at `~/models/neurovla-libero-all4suite/` by default.
+Use `--models-dir /another/model/root` to select a different parent directory.
+
 ### Step 1 — Pre-train NeuroVLA
 
 ```bash
@@ -48,7 +57,7 @@ bash scripts/run_brain_inspired_scripts/run_stdp_finetune.sh \
 ```bash
 # baseline eval on libero_goal
 bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
-    --pretrained /path/to/neurovla_checkpoint
+    --pretrained ~/models/neurovla-libero-all4suite
 
 # all 4 suites, 50 trials per task
 bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \

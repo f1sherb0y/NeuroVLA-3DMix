@@ -15,6 +15,14 @@ conda activate neurovla
 The setup script writes `.env.libero` with the pinned LIBERO checkout and
 headless MuJoCo settings. It does not download or load a NeuroVLA checkpoint.
 
+Download the official all-four-suite checkpoint for evaluation:
+
+```bash
+bash scripts/download_neurovla_checkpoint.sh
+```
+
+The default destination is `~/models/neurovla-libero-all4suite/`.
+
 Hardware: 4 × A800 80 GB default. Smaller setups work with `--gpus N`.
 
 ---
@@ -41,7 +49,7 @@ bash scripts/run_brain_inspired_scripts/run_stdp_finetune.sh \
 ```bash
 # Validate the checkpoint, environment, and commands without loading the model
 bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
-    --pretrained results/training/my_stdp_ft/checkpoints/steps_10000 \
+    --pretrained ~/models/neurovla-libero-all4suite \
     --suite all --dry-run
 
 # libero_goal, 10 trials/task
