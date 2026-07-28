@@ -43,6 +43,27 @@ bash scripts/run_brain_inspired_scripts/run_neurovla_pretrain.sh --steps 50000 -
 
 Checkpoints → `results/training/<run_id>/checkpoints/steps_XXXX/`.
 
+### NeuroVLA + 3D-MIX
+
+Install the pinned VGGT package through `scripts/setup_neurovla_env.sh`, then
+download the frozen official encoder and launch the matching GA2 recipe:
+
+```bash
+bash scripts/download_vggt_checkpoint.sh --models-dir ~/models
+export VGGT_MODEL_PATH="$HOME/models/VGGT-1B"
+export CONFIG_YAML=configs/finetune_config_ga2.yaml
+
+bash scripts/run_brain_inspired_scripts/run_neurovla_3d_mix_pretrain.sh \
+    --dataset libero_all --gpus 4 --batch-size 8 --steps 50000 \
+    --run-id neurovla_3d_mix_libero_all_h100x4_bs8_ga2
+```
+
+The Qwen, Q-Former, GRU/FiLM, SNN, data mixture, action loss, and schedule match
+the baseline. The added frozen VGGT-1B encoder processes the same primary and
+wrist views at 518 x 518, and trainable layer-wise gates append geometry tokens
+before the Q-Former. See `docs/quickstart/neurovla_3d_mix.md` for the exact
+formula, token pooling setting, memory implications, and evaluation command.
+
 ### Step 2 — Hybrid R-STDP Fine-tuning
 
 ```bash

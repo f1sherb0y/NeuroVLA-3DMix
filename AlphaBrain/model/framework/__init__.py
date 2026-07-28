@@ -57,6 +57,9 @@ def build_framework(cfg):
     elif cfg.framework.name == "NeuroVLA":
         from AlphaBrain.model.framework.NeuroVLA import NeuroVLA
         return NeuroVLA(cfg)
+    elif cfg.framework.name == "NeuroVLA3DMix":
+        from AlphaBrain.model.framework.NeuroVLA3DMix import NeuroVLA3DMix
+        return NeuroVLA3DMix(cfg)
     elif cfg.framework.name == "QwenGR00T":
         from AlphaBrain.model.framework.QwenGR00T import Qwen_GR00T
         return Qwen_GR00T(cfg)

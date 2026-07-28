@@ -64,6 +64,9 @@ bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
 
 Results: `results/evaluation/brain_inspired_eval_<timestamp>/<suite>/`.
 
+The VGGT-based comparison model has a separate architecture and matching
+training recipe: [NeuroVLA + 3D-MIX](neurovla_3d_mix.md).
+
 For an all-four-suite evaluation sharded across eight GPUs:
 
 ```bash

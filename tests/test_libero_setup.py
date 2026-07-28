@@ -62,6 +62,8 @@ class LiberoSetupTests(unittest.TestCase):
     def test_shell_scripts_parse(self):
         for relative_path in (
             "scripts/download_neurovla_checkpoint.sh",
+            "scripts/download_vggt_checkpoint.sh",
+            "scripts/run_brain_inspired_scripts/run_neurovla_3d_mix_pretrain.sh",
             "scripts/setup_neurovla_env.sh",
             "scripts/run_brain_inspired_scripts/run_eval_libero.sh",
         ):
@@ -96,6 +98,34 @@ class LiberoSetupTests(unittest.TestCase):
         script = (
             PROJECT_ROOT / "scripts" / "download_neurovla_checkpoint.sh"
         ).read_text(encoding="utf-8")
+        self.assertIn("conda run --no-capture-output", script)
+        self.assertIn("unset HF_HUB_DISABLE_PROGRESS_BARS", script)
+
+    def test_vggt_download_is_pinned_and_streams_progress(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(PROJECT_ROOT / "scripts" / "download_vggt_checkpoint.sh"),
+                    "--models-dir",
+                    temp_dir,
+                    "--dry-run",
+                ],
+                check=True,
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+            )
+
+            target = Path(temp_dir) / "VGGT-1B"
+            self.assertIn("facebook/VGGT-1B", result.stdout)
+            self.assertIn("860abec7937da0a4c03c41d3c269c366e82abdf9", result.stdout)
+            self.assertIn(str(target), result.stdout)
+            self.assertFalse(target.exists())
+
+        script = (PROJECT_ROOT / "scripts" / "download_vggt_checkpoint.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("conda run --no-capture-output", script)
         self.assertIn("unset HF_HUB_DISABLE_PROGRESS_BARS", script)
 

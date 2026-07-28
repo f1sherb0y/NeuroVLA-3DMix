@@ -1,0 +1,36 @@
+# NeuroVLA architecture with the paper's frozen-VGGT 3D-MIX bridge.
+framework:
+  name: NeuroVLA3DMix
+  architecture_version: 2
+  qwenvl:
+    attn_implementation: sdpa
+    vl_hidden_dim: 2048
+  layer_qformer:
+    qformer_end_layer: 37
+    qformer_start_layer: 36
+    num_query_tokens: 8
+    input_dim: 2048
+    output_dim: 768
+    grad_scale: 0.5
+  three_d_mix:
+    # The finetune mode can override this with VGGT_MODEL_PATH.
+    vggt_model_name_or_path: facebook/VGGT-1B
+    vggt_revision: 860abec7937da0a4c03c41d3c269c366e82abdf9
+    image_size: 518
+    vggt_dim: 2048
+    hidden_dim: 2048
+    # Paper-faithful default: retain every 37x37 patch from both LIBERO views
+    # (2738 geometry tokens total). Set 512 for a lower-memory 16x16/view run.
+    max_geometry_tokens: 0
+  action_model:
+    hidden_size: 1536
+    edit_hidden_size: 256
+    add_pos_embed: true
+    max_seq_len: 1024
+    action_dim: 7
+    state_dim: 8
+    future_action_window_size: 7
+    action_horizon: 8
+    past_action_window_size: 0
+    repeated_diffusion_steps: 8
+  reduce_in_full_precision: true

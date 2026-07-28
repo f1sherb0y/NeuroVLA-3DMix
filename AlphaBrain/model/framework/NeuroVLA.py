@@ -79,6 +79,36 @@ class NeuroVLA(BaseFramework):
         self.l1_loss = nn.L1Loss()
         self.norm_stats = norm_stats
 
+    def _geometry_images_from_examples(
+        self,
+        examples: List[dict],
+        images: List[List[Image.Image]],
+    ) -> List[List[Image.Image]]:
+        """Return the camera images used by optional geometry modules."""
+        return images
+
+    def _prepare_action_hidden_states(
+        self,
+        hidden_states: Sequence[torch.Tensor],
+        geometry_images: List[List[Image.Image]],
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> Sequence[torch.Tensor]:
+        """Hook for enriching VLM features before the layer-wise Q-Former."""
+        return hidden_states
+
+    def _encode_action_features(
+        self,
+        hidden_states: Sequence[torch.Tensor],
+        geometry_images: List[List[Image.Image]],
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        hidden_states = self._prepare_action_hidden_states(
+            hidden_states,
+            geometry_images,
+            attention_mask=attention_mask,
+        )
+        return self.layer_qformer(hidden_states)
+
     def _roll_forward_states(self, states: torch.Tensor, predicted_actions: torch.Tensor) -> torch.Tensor:
         """Build the state history used to condition the next predicted chunk."""
         if states.shape[-1] != self.state_dim:
@@ -143,6 +173,7 @@ class NeuroVLA(BaseFramework):
         """
         # Extract data from examples
         images = [example["image"] for example in examples]
+        geometry_images = self._geometry_images_from_examples(examples, images)
         instructions = [example["lang"] for example in examples]
         actions = [example["action"] for example in examples]
         assert "state" in examples[0], (
@@ -180,7 +211,11 @@ class NeuroVLA(BaseFramework):
             # Extract action-relevant features from VLM hidden states
             start_layer = self.config.framework.layer_qformer.qformer_start_layer if self.config else -6
             end_layer = self.config.framework.layer_qformer.qformer_end_layer if self.config else -1
-            action_latent_feature = self.layer_qformer(qwenvl_outputs.hidden_states[start_layer:end_layer])
+            action_latent_feature = self._encode_action_features(
+                qwenvl_outputs.hidden_states[start_layer:end_layer],
+                geometry_images,
+                attention_mask=qwen_inputs.attention_mask,
+            )
 
             states = torch.tensor(np.array(states), dtype=torch.float32, device=action_latent_feature.device)
             action_horizon = np.array(actions).shape[1]  # total action steps from ground truth
@@ -225,6 +260,7 @@ class NeuroVLA(BaseFramework):
         if isinstance(batch_images[0][0], np.ndarray):
             batch_images = [[Image.fromarray(img) for img in seq] for seq in batch_images]
 
+        geometry_images = batch_images
         batch_images = resize_images(batch_images, target_size=(224, 224))
 
         # Build VLM inputs
@@ -250,7 +286,11 @@ class NeuroVLA(BaseFramework):
             start_layer = self.config.framework.layer_qformer.qformer_start_layer if self.config else -2
             end_layer = self.config.framework.layer_qformer.qformer_end_layer if self.config else -1
 
-            action_latent_feature = self.layer_qformer(qwenvl_outputs.hidden_states[start_layer:end_layer])
+            action_latent_feature = self._encode_action_features(
+                qwenvl_outputs.hidden_states[start_layer:end_layer],
+                geometry_images,
+                attention_mask=qwen_inputs.attention_mask,
+            )
 
             # Convert states to tensor
             if states is None:

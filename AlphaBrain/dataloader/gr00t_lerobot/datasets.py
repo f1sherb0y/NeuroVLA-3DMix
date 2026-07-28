@@ -1373,13 +1373,22 @@ class LeRobotSingleDataset(Dataset):
         """Pack transformed modality data into training sample format."""
         prim_images = []
         wrist_views = []
+        prim_vggt_images = []
+        wrist_vggt_views = []
+        include_vggt_images = bool(
+            self.data_cfg is not None and self.data_cfg.get("include_vggt_images", False)
+        )
         for video_key in self.modality_keys["video"]:
-            image = data[video_key][0]
-            image = Image.fromarray(image).resize((224, 224))
+            raw_image = Image.fromarray(data[video_key][0])
+            image = raw_image.resize((224, 224))
             if "wrist" not in video_key:
                 prim_images.append(image)
+                if include_vggt_images:
+                    prim_vggt_images.append(raw_image)
             else:
                 wrist_views.append(image)
+                if include_vggt_images:
+                    wrist_vggt_views.append(raw_image)
         all_images = prim_images + wrist_views
 
         language = data[self.modality_keys["language"][0]][0]
@@ -1394,6 +1403,8 @@ class LeRobotSingleDataset(Dataset):
             "lang": language,
             "language": language,
         }
+        if include_vggt_images:
+            sample["vggt_image"] = prim_vggt_images + wrist_vggt_views
 
         if self.data_cfg is not None and self.data_cfg.get("include_state", False) not in ["False", False]:
             state = []

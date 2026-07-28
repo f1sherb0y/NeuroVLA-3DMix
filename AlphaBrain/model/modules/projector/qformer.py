@@ -64,7 +64,7 @@ class LayerwiseQFormer(nn.Module):
         # Independent cross-attention blocks (one per encoder layer)
         self.layers = nn.ModuleList([CrossAttentionBlock(output_hidden_dim, num_heads) for _ in range(num_layers)])
 
-    def forward(self, hidden_states_list, encoder_attention_mask=None):
+    def forward(self, hidden_states_list, encoder_attention_mask=None, apply_grad_scale=True):
         """
         Layer-wise Q-Former forward pass.
         Args:
@@ -80,7 +80,8 @@ class LayerwiseQFormer(nn.Module):
             - Asserts len(hidden_states_list) == num_layers.
             - Does not modify gradient flow of hidden_states_list.
         """
-        hidden_states_list = self.scale_hook(hidden_states_list)
+        if apply_grad_scale:
+            hidden_states_list = self.scale_hook(hidden_states_list)
 
         assert (
             len(hidden_states_list) == self.num_layers

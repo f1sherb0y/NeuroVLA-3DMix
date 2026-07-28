@@ -16,7 +16,8 @@ dependencies:
       - -r requirements.txt
       # Unified train/eval dependencies. LIBERO and robosuite themselves are
       # installed with --no-deps by scripts/setup_neurovla_env.sh so their old
-      # requirements cannot downgrade Qwen/NumPy/PyTorch.
+      # requirements cannot downgrade Qwen/NumPy/PyTorch. The same script
+      # installs pinned VGGT with --no-deps to preserve opencv-python-headless.
       - bddl==1.0.1
       - cloudpickle==2.1.0
       - easydict==1.9

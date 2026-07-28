@@ -129,6 +129,15 @@ class BaseFramework(PreTrainedModel):
             config = dict_to_namespace(model_config)
             config.trainer.pretrained_checkpoint = None
 
+            # NeuroVLA3DMix checkpoints already contain the frozen VGGT
+            # aggregator. Build its architecture without reading an external
+            # VGGT checkpoint, then populate it from model.safetensors below.
+            if (
+                getattr(config.framework, "name", "") == "NeuroVLA3DMix"
+                and hasattr(config.framework, "three_d_mix")
+            ):
+                config.framework.three_d_mix.initialize_vggt_from_checkpoint = True
+
             # 单次加载优化 - 如果checkpoint目录包含vlm_pretrained/（兼容旧名qwen_pretrained/），
             # 直接从中加载tokenizer/config，用meta device创建模型骨架，由后续load_state_dict一次性加载所有权重
             vlm_pretrained_dir = pretrained_checkpoint / "vlm_pretrained"

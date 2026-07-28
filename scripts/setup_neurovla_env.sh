@@ -11,6 +11,8 @@ LIBERO_HOME="${LIBERO_HOME:-$PROJECT_ROOT/third_party/LIBERO}"
 LIBERO_REPOSITORY="${LIBERO_REPOSITORY:-https://github.com/Lifelong-Robot-Learning/LIBERO.git}"
 LIBERO_REVISION="${LIBERO_REVISION:-8f1084e3132a39270c3a13ebe37270a43ece2a01}"
 LIBERO_PATCH="$PROJECT_ROOT/patches/libero-pytorch-2.6.patch"
+VGGT_REPOSITORY="${VGGT_REPOSITORY:-https://github.com/facebookresearch/vggt.git}"
+VGGT_REVISION="${VGGT_REVISION:-a288dd0f14786c93483e45524328726ab7b1b4ce}"
 MUJOCO_GL_BACKEND="${MUJOCO_GL:-egl}"
 SKIP_ENV_UPDATE=false
 RUN_SIMULATOR_SMOKE=false
@@ -105,6 +107,13 @@ conda run -n "$ENV_NAME" python -m pip install \
     --no-deps \
     --config-settings editable_mode=compat \
     --editable "$LIBERO_HOME"
+# VGGT's declared opencv-python dependency conflicts with the headless build
+# pinned above. Its aggregator path only needs packages already in environment.yml.
+if ! conda run -n "$ENV_NAME" python -c 'import vggt' >/dev/null 2>&1; then
+    conda run -n "$ENV_NAME" python -m pip install \
+        --no-deps \
+        "git+$VGGT_REPOSITORY@$VGGT_REVISION"
+fi
 conda run -n "$ENV_NAME" python "$PROJECT_ROOT/scripts/configure_libero.py" \
     --libero-home "$LIBERO_HOME" \
     --config-dir "$PROJECT_ROOT/.libero" \
@@ -120,6 +129,8 @@ export PYTHONPATH="$PROJECT_ROOT:$LIBERO_HOME${PYTHONPATH:+:$PYTHONPATH}"
 SMOKE_ARGS=()
 [ "$RUN_SIMULATOR_SMOKE" = true ] && SMOKE_ARGS+=(--simulator)
 conda run -n "$ENV_NAME" python "$PROJECT_ROOT/scripts/smoke_test_libero.py" "${SMOKE_ARGS[@]}"
+conda run -n "$ENV_NAME" python -c \
+    'from vggt.models.vggt import VGGT; print("VGGT import: OK")'
 
 echo "Unified NeuroVLA environment is ready: $ENV_NAME"
 echo "Run evaluation with:"
