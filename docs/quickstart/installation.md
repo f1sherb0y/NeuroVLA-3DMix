@@ -55,6 +55,17 @@ pip install -e .
 pip install tyro matplotlib mediapy websockets msgpack rich "numpy==1.24.4"
 ```
 
+For NeuroVLA's direct in-process evaluator, use the repository's unified
+train/eval setup instead. It preserves the modern Qwen/PyTorch dependency pins
+while adding a compatible LIBERO simulator stack:
+
+```bash
+bash scripts/setup_neurovla_env.sh
+```
+
+Do not install LIBERO's historical `requirements.txt` into `neurovla`; it pins
+old Transformers and NumPy versions that are incompatible with Qwen2.5-VL.
+
 ---
 
 ## 4. Download Pretrained Models and Data
@@ -135,9 +146,13 @@ LIBERO_DATA_ROOT=/your/path/to/IPEC-COMMUNITY
 # LIBERO project root (simulation env)
 LIBERO_HOME=/your/path/to/LIBERO
 
-# Python interpreter of the separate LIBERO evaluation conda env
+# Python interpreter used by launchers that run LIBERO in a separate process
 LIBERO_PYTHON=/your/path/to/miniconda3/envs/libero/bin/python
 ```
+
+For the unified NeuroVLA setup, do not add `LIBERO_HOME` or `LIBERO_PYTHON`
+manually. `scripts/setup_neurovla_env.sh` writes those values to the ignored
+`.env.libero` file and both training and direct evaluation use `neurovla`.
 
 !!! note "`.env` is not version-controlled"
     `.env` is already in `.gitignore`, so you can safely store local paths and sensitive info.

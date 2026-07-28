@@ -7,9 +7,13 @@ Brain-inspired VLA: pretrain a Spiking Neural Network action head with backprop,
 ## Prerequisites
 
 ```bash
-conda activate alphabrain
-# Same .env fields as Baseline VLA
+# Creates one environment for both training and in-process LIBERO evaluation.
+bash scripts/setup_neurovla_env.sh --simulator-smoke
+conda activate neurovla
 ```
+
+The setup script writes `.env.libero` with the pinned LIBERO checkout and
+headless MuJoCo settings. It does not download or load a NeuroVLA checkpoint.
 
 Hardware: 4 × A800 80 GB default. Smaller setups work with `--gpus N`.
 
@@ -35,6 +39,11 @@ bash scripts/run_brain_inspired_scripts/run_stdp_finetune.sh \
 ### 3. Evaluate
 
 ```bash
+# Validate the checkpoint, environment, and commands without loading the model
+bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
+    --pretrained results/training/my_stdp_ft/checkpoints/steps_10000 \
+    --suite all --dry-run
+
 # libero_goal, 10 trials/task
 bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
     --pretrained results/training/my_stdp_ft/checkpoints/steps_10000

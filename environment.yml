@@ -14,4 +14,18 @@ dependencies:
       - torch==2.6.0+cu124
       - torchvision==0.21.0+cu124
       - -r requirements.txt
+      # Unified train/eval dependencies. LIBERO and robosuite themselves are
+      # installed with --no-deps by scripts/setup_neurovla_env.sh so their old
+      # requirements cannot downgrade Qwen/NumPy/PyTorch.
+      - bddl==1.0.1
+      - cloudpickle==2.1.0
+      - easydict==1.9
+      - future==0.18.2
+      - gym==0.25.2
+      - imageio-ffmpeg==0.6.0
+      - mediapy==1.2.7
+      - mujoco==2.3.7
+      - numba==0.60.0
+      - opencv-python-headless==4.11.0.86
+      - termcolor==2.4.0
       - -e .
