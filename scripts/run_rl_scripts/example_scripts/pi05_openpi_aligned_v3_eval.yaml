@@ -1,0 +1,24 @@
+# Eval config for jeff's paligemma_pi0_openpi_aligned_v3 ckpt.
+#
+# Source: /share/jeff/VLA-Engine-Developer/results/training/paligemma_pi0_openpi_aligned_v3/
+#   framework: PaliGemmaPi05 (paligemma_pi0 with pi05 head)
+#   data: libero_all, 60k steps, openpi-aligned, effective BS=256
+#
+# Launch:
+#   bash scripts/run_eval.sh pi05_openpi_aligned_v3_eval \
+#        scripts/run_rl_scripts/pi05_openpi_aligned_v3_eval.yaml
+#
+# Swap `checkpoint` to an intermediate step (checkpoints/steps_{5000..60000})
+# to eval mid-training. Available steps: 5000, 10000, 15000, 20000, 25000,
+# 30000, 40000, 50000, 60000.
+
+modes:
+  pi05_openpi_aligned_v3_eval:
+    type: "eval"
+    checkpoint: "/share/jeff/VLA-Engine-Developer/results/training/paligemma_pi0_openpi_aligned_v3/checkpoints/steps_5000"
+    task_suite: "libero_goal"
+    num_trials: 10
+    host: "127.0.0.1"
+    port: 5798
+    gpu_id: 1
+    use_bf16: true
