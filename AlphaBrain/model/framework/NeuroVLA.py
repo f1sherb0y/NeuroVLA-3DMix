@@ -238,7 +238,8 @@ class NeuroVLA(BaseFramework):
                 attention_mask=qwen_inputs.attention_mask,
                 pixel_values=qwen_inputs.pixel_values,
                 image_grid_thw=qwen_inputs.image_grid_thw,
-                labels=qwen_inputs.input_ids.clone(),
+                use_cache=False,
+                logits_to_keep=1,
                 output_hidden_states=True,
                 return_dict=True,
             )

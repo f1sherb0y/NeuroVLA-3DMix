@@ -81,11 +81,14 @@ class Args:
 
     # LIBERO environment
     task_suite_name: str = "libero_goal"
+    task_ids: str = ""  # Optional comma-separated task IDs; empty evaluates all tasks.
     num_steps_wait: int = 10
     num_trials_per_task: int = 10
+    hard_reset: bool = False
 
     # Output
     video_out_path: str = "experiments/libero/logs_online_stdp"
+    save_videos: bool = True
     seed: int = 7
     post_process_action: bool = True
     job_name: str = "online_stdp"
@@ -183,7 +186,7 @@ def _unnormalize_actions(
     return actions
 
 
-def _get_libero_env(task, resolution, seed):
+def _get_libero_env(task, resolution, seed, hard_reset=False):
     task_description = task.language
     task_bddl_file = (
         pathlib.Path(get_libero_path("bddl_files"))
@@ -194,10 +197,33 @@ def _get_libero_env(task, resolution, seed):
         "bddl_file_name": task_bddl_file,
         "camera_heights": resolution,
         "camera_widths": resolution,
+        "hard_reset": hard_reset,
     }
     env = OffScreenRenderEnv(**env_args)
     env.seed(seed)
     return env, task_description
+
+
+def _parse_task_ids(value: str, num_tasks: int) -> list[int]:
+    if not value.strip():
+        return list(range(num_tasks))
+
+    try:
+        task_ids = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError(f"Invalid --task-ids value: {value!r}") from exc
+
+    if not task_ids:
+        raise ValueError("--task-ids must contain at least one task ID")
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError(f"Duplicate task IDs are not allowed: {task_ids}")
+
+    invalid = [task_id for task_id in task_ids if not 0 <= task_id < num_tasks]
+    if invalid:
+        raise ValueError(
+            f"Task IDs {invalid} are outside the valid range 0..{num_tasks - 1}"
+        )
+    return task_ids
 
 
 def _get_max_steps(task_suite_name: str) -> int:
@@ -218,6 +244,14 @@ def eval_libero_online_stdp(args: Args) -> None:
 
     np.random.seed(args.seed)
 
+    # Validate the requested suite and shard before loading the multi-gigabyte model.
+    benchmark_dict = benchmark.get_benchmark_dict()
+    if args.task_suite_name not in benchmark_dict:
+        raise ValueError(f"Unknown task suite: {args.task_suite_name}")
+    task_suite = benchmark_dict[args.task_suite_name]()
+    selected_task_ids = _parse_task_ids(args.task_ids, task_suite.n_tasks)
+    max_steps = _get_max_steps(args.task_suite_name)
+
     # Load model directly
     model = _load_model(args)
     action_norm_stats = _get_action_norm_stats(args.pretrained_path, args.norm_mode)
@@ -232,14 +266,10 @@ def eval_libero_online_stdp(args: Args) -> None:
         adapter.enable()
 
     # Initialize LIBERO
-    benchmark_dict = benchmark.get_benchmark_dict()
-    task_suite = benchmark_dict[args.task_suite_name]()
-    num_tasks_in_suite = task_suite.n_tasks
-    max_steps = _get_max_steps(args.task_suite_name)
-
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
     logging.info(f"Task suite: {args.task_suite_name}")
+    logging.info(f"Task IDs: {selected_task_ids}")
     if use_stdp:
         logging.info(f"Online STDP enabled: lr={stdp_config.stdp_lr}, "
                      f"warmup={stdp_config.warmup_episodes} episodes, "
@@ -251,13 +281,20 @@ def eval_libero_online_stdp(args: Args) -> None:
     total_episodes, total_successes = 0, 0
     # Track success rate over time for adaptation analysis
     success_history = []
+    task_results = []
 
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite), desc="Tasks"):
+    for task_id in tqdm.tqdm(selected_task_ids, desc="Tasks"):
         task = task_suite.get_task(task_id)
         initial_states = task_suite.get_task_init_states(task_id)
-        env, task_description = _get_libero_env(task, LIBERO_ENV_RESOLUTION, args.seed)
+        env, task_description = _get_libero_env(
+            task,
+            LIBERO_ENV_RESOLUTION,
+            args.seed,
+            hard_reset=args.hard_reset,
+        )
 
         task_episodes, task_successes = 0, 0
+        task_success_history = []
 
         for episode_idx in tqdm.tqdm(
             range(args.num_trials_per_task), desc=f"Task {task_id}", leave=False
@@ -306,7 +343,8 @@ def eval_libero_online_stdp(args: Args) -> None:
                 wrist_img = np.ascontiguousarray(
                     obs["robot0_eye_in_hand_image"][::-1, ::-1]
                 )
-                replay_images.append(img)
+                if args.save_videos:
+                    replay_images.append(img)
 
                 state = np.concatenate((
                     obs["robot0_eef_pos"],
@@ -398,11 +436,12 @@ def eval_libero_online_stdp(args: Args) -> None:
             task_episodes += 1
             total_episodes += 1
             success_history.append(float(done))
+            task_success_history.append(float(done))
 
             # Save replay video
             suffix = "success" if done else "failure"
             task_segment = task_description.replace(" ", "_")
-            if replay_images:
+            if args.save_videos and replay_images:
                 imageio.mimwrite(
                     pathlib.Path(args.video_out_path)
                     / f"rollout_{task_segment}_episode{episode_idx}_{suffix}.mp4",
@@ -431,6 +470,16 @@ def eval_libero_online_stdp(args: Args) -> None:
             f"Task {task_id} success rate: "
             f"{float(task_successes) / float(task_episodes):.3f}"
         )
+        task_results.append(
+            {
+                "task_id": task_id,
+                "task_description": task_description,
+                "total_episodes": task_episodes,
+                "total_successes": task_successes,
+                "success_rate": float(task_successes) / float(task_episodes),
+                "success_history": task_success_history,
+            }
+        )
         env.close()
 
         # Reset adapter weights between tasks to prevent cross-task interference
@@ -458,11 +507,16 @@ def eval_libero_online_stdp(args: Args) -> None:
 
     # Save evaluation results
     results = {
+        "task_suite_name": args.task_suite_name,
+        "task_ids": selected_task_ids,
         "total_episodes": total_episodes,
         "total_successes": total_successes,
         "success_rate": float(total_successes) / float(total_episodes),
         "success_history": success_history,
+        "task_results": task_results,
         "stdp_enabled": use_stdp,
+        "hard_reset": args.hard_reset,
+        "videos_saved": args.save_videos,
     }
     if use_stdp:
         results["stdp_config"] = dataclasses.asdict(stdp_config) if dataclasses.is_dataclass(stdp_config) else vars(stdp_config)

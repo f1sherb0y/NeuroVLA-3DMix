@@ -1,4 +1,5 @@
 import os
+import inspect
 import unittest
 from unittest.mock import patch
 
@@ -108,6 +109,12 @@ class NeuroVLARegressionTests(unittest.TestCase):
 
     def test_libero_10_alias(self):
         self.assertEqual(DATASET_NAMED_MIXTURES["libero_10"], DATASET_NAMED_MIXTURES["libero_long"])
+
+    def test_predict_action_skips_unused_lm_loss_and_cache(self):
+        source = inspect.getsource(NeuroVLA.predict_action)
+        self.assertNotIn("labels=", source)
+        self.assertIn("use_cache=False", source)
+        self.assertIn("logits_to_keep=1", source)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,20 @@ bash scripts/run_brain_inspired_scripts/run_eval_libero.sh \
 
 Results: `results/evaluation/brain_inspired_eval_<timestamp>/<suite>/`.
 
+For an all-four-suite evaluation sharded across eight GPUs:
+
+```bash
+python scripts/run_brain_inspired_scripts/run_eval_libero_multi_gpu.py \
+    --pretrained ~/models/neurovla-libero-all4suite \
+    --suite all \
+    --trials 50 \
+    --gpus 0,1,2,3,4,5,6,7
+```
+
+This evaluates each task exactly once, streams all worker logs, and writes an
+aggregate `eval_results.json`. Videos are disabled by default for throughput;
+add `--save-videos` to retain every rollout.
+
 ---
 
 Full CLI reference and the team's open-research notes: [`scripts/run_brain_inspired_scripts/README.md`](https://github.com/AlphaBrainGroup/AlphaBrain/blob/main/scripts/run_brain_inspired_scripts/README.md).

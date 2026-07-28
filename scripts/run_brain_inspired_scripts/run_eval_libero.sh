@@ -10,6 +10,7 @@
 #   bash run_eval_libero.sh --pretrained <ckpt> --suite libero_spatial
 #   bash run_eval_libero.sh --pretrained <ckpt> --suite all             # run all 4 suites
 #   bash run_eval_libero.sh --pretrained <ckpt> --trials 50 --gpu 1
+#   bash run_eval_libero.sh --pretrained <ckpt> --task-ids 0,1,2 --no-video
 #   bash run_eval_libero.sh --pretrained <ckpt> --online-stdp            # enable online STDP
 #   bash run_eval_libero.sh --pretrained <ckpt> --dry-run                # validate only
 # =============================================================================
@@ -27,12 +28,14 @@ cd "$PROJECT_ROOT"
 # ---------- defaults ----------
 PRETRAINED=""
 SUITE="libero_goal"
+TASK_IDS=""
 TRIALS="${NUM_TRIALS:-10}"
 SEED="${SEED:-7}"
 GPU="${CUDA_VISIBLE_DEVICES:-0}"
 VIDEO_OUT="${VIDEO_OUT:-results/evaluation/brain_inspired_eval_$(date +%Y%m%d_%H%M%S)}"
 ONLINE_STDP=false
 DRY_RUN=false
+SAVE_VIDEOS=true
 CONDA_ENV="${CONDA_ENV:-neurovla}"
 
 # Online STDP defaults (only used if --online-stdp)
@@ -47,11 +50,13 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --pretrained|--ckpt) PRETRAINED="$2"; shift 2 ;;
         --suite)             SUITE="$2"; shift 2 ;;
+        --task-ids)          TASK_IDS="$2"; shift 2 ;;
         --trials)            TRIALS="$2"; shift 2 ;;
         --seed)              SEED="$2"; shift 2 ;;
         --gpu)               GPU="$2"; shift 2 ;;
         --video-out)         VIDEO_OUT="$2"; shift 2 ;;
         --online-stdp)       ONLINE_STDP=true; shift ;;
+        --no-video)          SAVE_VIDEOS=false; shift ;;
         --dry-run)           DRY_RUN=true; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
@@ -109,6 +114,7 @@ for S in "${SUITES[@]}"; do
     echo "  Suite:        $S"
     echo "  Checkpoint:   $PRETRAINED"
     echo "  Trials/task:  $TRIALS"
+    echo "  Task IDs:     ${TASK_IDS:-all}"
     echo "  GPU:          $GPU"
     echo "  Online STDP:  $ONLINE_STDP"
     echo "  Output:       $OUT_DIR"
@@ -122,6 +128,9 @@ for S in "${SUITES[@]}"; do
         --video-out-path "$OUT_DIR"
         --seed "$SEED"
     )
+
+    [ -n "$TASK_IDS" ] && CMD+=(--task-ids "$TASK_IDS")
+    [ "$SAVE_VIDEOS" = false ] && CMD+=(--no-save-videos)
 
     if [ "$ONLINE_STDP" = true ]; then
         CMD+=(
