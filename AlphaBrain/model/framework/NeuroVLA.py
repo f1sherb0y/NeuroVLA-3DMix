@@ -107,7 +107,10 @@ class NeuroVLA(BaseFramework):
             geometry_images,
             attention_mask=attention_mask,
         )
-        return self.layer_qformer(hidden_states)
+        return self.layer_qformer(
+            hidden_states,
+            encoder_attention_mask=attention_mask,
+        )
 
     def _roll_forward_states(self, states: torch.Tensor, predicted_actions: torch.Tensor) -> torch.Tensor:
         """Build the state history used to condition the next predicted chunk."""

@@ -52,7 +52,16 @@ class NeuroVLA3DMix(NeuroVLA):
             geometry_images,
             attention_mask=attention_mask,
         )
-        return self.layer_qformer(hidden_states, apply_grad_scale=False)
+        geometry_mask = attention_mask.new_ones(
+            attention_mask.shape[0],
+            hidden_states[0].shape[1] - attention_mask.shape[1],
+        )
+        conditioning_mask = torch.cat((attention_mask, geometry_mask), dim=1)
+        return self.layer_qformer(
+            hidden_states,
+            encoder_attention_mask=conditioning_mask,
+            apply_grad_scale=False,
+        )
 
 
 def build_model_framework(config: dict = {}) -> NeuroVLA3DMix:

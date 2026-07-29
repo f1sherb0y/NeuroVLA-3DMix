@@ -36,7 +36,7 @@ class CrossAttentionBlock(nn.Module):
         kv = encoder_hidden_state
 
         if encoder_attention_mask is not None:
-            attn_mask = encoder_attention_mask.unsqueeze(1).to(dtype=torch.bool)  # [B, 1, L]
+            attn_mask = ~encoder_attention_mask.to(dtype=torch.bool)
         else:
             attn_mask = None
 
