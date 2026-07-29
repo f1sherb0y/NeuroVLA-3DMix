@@ -98,6 +98,12 @@ def _result_path(output_root: Path, shard: Shard) -> Path:
     return output_root / "shards" / shard.name / shard.suite / "eval_results.json"
 
 
+def select_pending_shards(output_root: Path, shards: list[Shard], resume: bool) -> list[Shard]:
+    if not resume:
+        return shards
+    return [shard for shard in shards if not _result_path(output_root, shard).is_file()]
+
+
 def aggregate_results(
     output_root: Path,
     shards: list[Shard],
@@ -232,6 +238,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--output", default=None, help="Output root directory")
     parser.add_argument("--online-stdp", action="store_true")
+    parser.add_argument("--resume", action="store_true", help="Reuse completed shards in --output")
     parser.add_argument(
         "--save-videos",
         action="store_true",
@@ -245,6 +252,8 @@ def main() -> None:
     args = parse_args()
     if args.trials <= 0:
         raise SystemExit("ERROR: --trials must be positive")
+    if args.resume and not args.output:
+        raise SystemExit("ERROR: --resume requires --output")
 
     try:
         gpus = parse_gpus(args.gpus)
@@ -273,22 +282,25 @@ def main() -> None:
     for shard in shards:
         print(f"  - {shard.label}")
 
-    commands = [
-        _build_command(single_gpu_script, shard, args, output_root)
-        for shard in shards
-    ]
+    pending_shards = select_pending_shards(output_root, shards, args.resume)
+    commands = [_build_command(single_gpu_script, shard, args, output_root) for shard in pending_shards]
     if args.dry_run:
         for command in commands:
             print(f"Dry-run command: {shlex.join(command)}")
         return
 
-    output_root.mkdir(parents=True, exist_ok=False)
+    output_root.mkdir(parents=True, exist_ok=args.resume)
     logs_dir = output_root / "logs"
-    logs_dir.mkdir()
+    logs_dir.mkdir(exist_ok=args.resume)
+
+    if args.resume:
+        for shard in shards:
+            if shard not in pending_shards:
+                print(f"Reusing completed shard: {shard.label}")
 
     processes: list[tuple[Shard, subprocess.Popen[str], threading.Thread]] = []
     try:
-        for shard, command in zip(shards, commands):
+        for shard, command in zip(pending_shards, commands):
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             process = subprocess.Popen(

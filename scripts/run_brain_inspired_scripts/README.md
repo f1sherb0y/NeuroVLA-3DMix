@@ -139,6 +139,9 @@ For all four suites, at least four GPUs are required. With eight GPUs, each
 suite is split into tasks `0-4` and `5-9`. Replay videos are disabled by default;
 pass `--save-videos` when they are required.
 
+Use `--resume --output <existing-output>` after an interrupted multi-GPU run.
+Completed shards are reused and only missing shards are launched.
+
 ---
 
 ## What each script launches

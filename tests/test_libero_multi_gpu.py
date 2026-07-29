@@ -10,6 +10,7 @@ from scripts.run_brain_inspired_scripts.run_eval_libero_multi_gpu import (
     _result_path,
     aggregate_results,
     build_shard_plan,
+    select_pending_shards,
 )
 
 
@@ -103,6 +104,18 @@ class LiberoMultiGpuTests(unittest.TestCase):
             self.assertIn("--task-ids 5,6,7,8,9", result.stdout)
             self.assertIn("--no-video", result.stdout)
             self.assertFalse(output.exists())
+
+    def test_resume_skips_completed_shards(self):
+        shards = build_shard_plan([str(index) for index in range(8)], list(SUPPORTED_SUITES))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_root = Path(temp_dir)
+            completed_result = _result_path(output_root, shards[0])
+            completed_result.parent.mkdir(parents=True)
+            completed_result.write_text("{}", encoding="utf-8")
+
+            pending = select_pending_shards(output_root, shards, resume=True)
+
+        self.assertEqual(pending, shards[1:])
 
 
 if __name__ == "__main__":

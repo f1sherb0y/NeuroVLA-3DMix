@@ -77,7 +77,8 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-$PROJECT_ROOT/.libero}"
 }
 
 MUJOCO_GL="${MUJOCO_GL:-egl}"
-MUJOCO_EGL_DEVICE_ID="${MUJOCO_EGL_DEVICE_ID:-$GPU}"
+# CUDA_VISIBLE_DEVICES exposes one physical GPU as logical device 0.
+MUJOCO_EGL_DEVICE_ID=0
 
 export CUDA_VISIBLE_DEVICES="$GPU"
 export LIBERO_HOME LIBERO_CONFIG_PATH MUJOCO_GL MUJOCO_EGL_DEVICE_ID
@@ -116,6 +117,7 @@ for S in "${SUITES[@]}"; do
     echo "  Trials/task:  $TRIALS"
     echo "  Task IDs:     ${TASK_IDS:-all}"
     echo "  GPU:          $GPU"
+    echo "  EGL device:   $MUJOCO_EGL_DEVICE_ID"
     echo "  Online STDP:  $ONLINE_STDP"
     echo "  Output:       $OUT_DIR"
     echo "=============================================="
