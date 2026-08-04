@@ -27,7 +27,6 @@ from typing import Tuple
 import numpy as np
 import torch
 import torch.distributed as dist
-import wandb
 from accelerate import Accelerator, DeepSpeedPlugin
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
@@ -156,8 +155,6 @@ class STDPTrainer(TrainerUtils):
             self.accelerator, self.model, self.optimizer, self.dataloader
         )
 
-        self._init_wandb()
-
     def _init_stdp(self):
         """Initialize STDP monitoring and learning components."""
         if not self.stdp_enabled:
@@ -213,22 +210,6 @@ class STDPTrainer(TrainerUtils):
             for _ in range(self.completed_steps):
                 self.lr_scheduler.step()
             logger.info(f"LR scheduler at step {self.completed_steps}, LR: {self.lr_scheduler.get_last_lr()}")
-
-    def _init_wandb(self):
-        if self.accelerator.is_main_process:
-            if hasattr(self.config, "environment") and self.config.environment is not None:
-                wandb_project = self.config.environment.wandb_project
-                wandb_entity = self.config.environment.wandb_entity
-            else:
-                wandb_project = getattr(self.config, "wandb_project", "vla-engine-stdp")
-                wandb_entity = getattr(self.config, "wandb_entity", "")
-            wandb.init(
-                name=self.config.run_id,
-                dir=os.path.join(self.config.output_dir, "wandb"),
-                project=wandb_project,
-                entity=wandb_entity or None,
-                group="vla-stdp-train",
-            )
 
     def _init_checkpointing(self):
         self.checkpoint_dir = os.path.join(self.config.output_dir, "checkpoints")
@@ -339,8 +320,6 @@ class STDPTrainer(TrainerUtils):
                 metrics["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
                 metrics["epoch"] = round(self.completed_steps / max(len(self.dataloader), 1), 2)
                 metrics["step"] = self.completed_steps
-
-                wandb.log(metrics, step=self.completed_steps)
 
                 metrics_file = os.path.join(self.config.output_dir, "metrics.jsonl")
                 with open(metrics_file, "a") as f:
@@ -535,9 +514,6 @@ class STDPTrainer(TrainerUtils):
         # Cleanup
         if self.spike_monitor is not None:
             self.spike_monitor.disable()
-
-        if self.accelerator.is_main_process:
-            wandb.finish()
 
         self.accelerator.wait_for_everyone()
 

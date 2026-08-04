@@ -11,7 +11,6 @@
 #
 # Environment variables:
 #   Data paths and python envs are defined in .env at project root.
-#   wandb settings can be overridden per-mode or globally below.
 # ============================================================================
 
 defaults:
@@ -24,10 +23,6 @@ seed: 42
 
 # === Environment ===
 environment:
-  wandb_mode: "online"
-  wandb_project: "vla-engine-benchmark"
-  wandb_entity: ""
-  wandb_base_url: https://api.bandw.top
   num_gpus: 2
   main_process_port: 29500
   nccl:
@@ -181,7 +176,6 @@ modes:
     num_gpus: 4
     main_process_port: 29520
     run_id: "paligemma_oft_long_bs128_v2"
-    wandb_mode: "disabled"
     framework_name: "PaliGemmaOFT"
     data_root: "${LIBERO_DATA_ROOT}"
     dataset: libero
@@ -355,15 +349,12 @@ modes:
     num_gpus: 4
     main_process_port: 29510
     run_id: "paligemma_pi05"
-    wandb_project: "vla-engine-benchmark"
-    wandb_base_url: "https://api.bandw.top"
     framework_name: "PaliGemmaPi05"
     data_root: "${LIBERO_DATA_ROOT}"
     dataset: libero
     dataset_mix: "libero_all"
     deepspeed_config: "configs/deepspeed/accelerate_zero2_4gpu_nooffload.yaml"
     use_ddp: false
-    wandb_mode: "online"
     training:
       per_device_batch_size: 64
       gradient_accumulation_steps: 1
@@ -1206,7 +1197,6 @@ modes:
     num_gpus: 4
     main_process_port: 29520
     run_id: "paligemma_oft_all_150k"
-    wandb_mode: "disabled"
     framework_name: "PaliGemmaOFT"
     data_root: ${oc.env:DATA_ROOT,data/datasets/IPEC-COMMUNITY}
     dataset: libero
@@ -1228,7 +1218,6 @@ modes:
     num_gpus: 4
     main_process_port: 29521
     run_id: "llama_oft_all_150k"
-    wandb_mode: "disabled"
     framework_name: "LlamaOFT"
     data_root: ${oc.env:DATA_ROOT,data/datasets/IPEC-COMMUNITY}
     dataset: libero

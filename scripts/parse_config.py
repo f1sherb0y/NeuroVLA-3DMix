@@ -55,9 +55,6 @@ def parse_config(config_path: str, mode: str):
     # 判断是 eval 模式还是 train 模式
     is_eval = mode_config.get('type') == 'eval'
 
-    # 输出环境变量
-    print(f"export WANDB_MODE={mode_config.get('wandb_mode', env_config.get('wandb_mode', 'disabled'))}")
-
     # NCCL 配置
     nccl = env_config.get('nccl', {})
     if 'ib_hca' in nccl:

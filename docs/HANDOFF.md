@@ -337,6 +337,46 @@ Qwen attention mask to the Q-Former. Commit `076ceeb` now:
 Single-sample inference without padding is unchanged. Batched training now
 excludes left-padding states while retaining every appended geometry token.
 
+### 6.11 Weights & Biases initialization could abort training
+
+`_init_wandb` called `wandb.init` without a `mode` argument, so any value of
+`wandb_mode` other than the exact string `disabled` attempted an online login.
+Both NeuroVLA modes inherited `environment.wandb_mode: "online"`, and the
+training server is air-gapped with no W&B credentials, so rank 0 raised
+`UsageError: No API key configured` and torchrun terminated the other seven
+ranks. The failure happened in `prepare_training`, after the Qwen load and all
+four dataset statistics passes.
+
+W&B was only a metrics sink. Every value it received was already written to
+`results/training/<run-id>/metrics.jsonl` on the following line, and the
+training loop already guarded its `wandb.log` call with `if wandb.run is not
+None`. W&B has therefore been removed from both NeuroVLA training entry points
+rather than made optional:
+
+- `AlphaBrain/training/train_alphabrain.py` and
+  `AlphaBrain/training/train_stdp.py` no longer import or call `wandb`;
+- the dead `wandb_*` keys are gone from `configs/finetune_config.yaml` and
+  `configs/finetune_config_ga2.yaml`; and
+- `scripts/parse_config.py` no longer exports `WANDB_MODE`.
+
+Training progress is now read from three local sources:
+
+```text
+results/training/<run-id>/metrics.jsonl        one JSON object per logged step
+results/training/<run-id>/logs/train_*.log     run log
+stdout                                         per-step console line + tqdm bar
+```
+
+The console line and `metrics.jsonl` both carry `action_dit_loss`, which holds
+the framework's `action_loss` — NeuroVLA's L1 action loss — despite the legacy
+`dit` name. No training behavior changed: W&B never touched the model,
+optimizer, dataloader, loss, or checkpoint writing.
+
+Other trainers in the repository (`train_alphabrain_cotrain.py`,
+`train_alphabrain_vlm.py`, the continual-learning trainer, and the RL trainers)
+still use W&B and still list it in `requirements.txt`. They are not part of the
+baseline-versus-3D-MIX workflow and were left unchanged.
+
 ## 7. NeuroVLA3DMix architecture
 
 The new variant is implemented in:
@@ -669,6 +709,29 @@ network are non-fatal. Set `NO_ALBUMENTATIONS_UPDATE=1` to suppress them. No
 checkpoint or training progress was produced by this failed launch, so the same
 run ID can be reused after repairing the metadata.
 
+### 11.3 Second 8-H100 training launch incident
+
+On 2026-08-01 the baseline relaunch got further. The captured log is available
+locally at:
+
+```text
+~/Downloads/logs-acp-20260803T220054.txt.gz
+```
+
+The `meta/modality.json` repair had worked. All four subsets built cleanly and
+the log reported:
+
+```text
+Dataset lengths: [ 66984  52042  52970 101469]
+[model]  Total 3772.56M  Trainable 3772.56M
+```
+
+The run then failed at 09:45:18, before step 0, with
+`wandb.errors.errors.UsageError: No API key configured`. This was the W&B
+initialization defect recorded in section 6.11, not a data, model, DeepSpeed,
+NCCL, or GPU failure. Again no checkpoint was produced, so the same run ID can
+be reused.
+
 ## 12. Evaluation workflow
 
 Evaluation is in-process: one Python process owns both the policy and its
@@ -862,6 +925,8 @@ The following checks have passed locally:
 - baseline NeuroVLA regression tests
 - eight-GPU shard-plan and result aggregation tests
 - EGL logical-device mapping test
+- config resolution for `neuro_vla`, `neuro_vla_3d_mix`, and `neuro_vla_stdp`
+  after the W&B key removal, in both GA1 and GA2 configs
 
 At handoff time the complete test suite has 23 passing tests:
 
@@ -907,11 +972,12 @@ What has not been tested locally:
 
 ## 18. Immediate next actions
 
-1. Install and verify `meta/modality.json` in all four LeRobot LIBERO subset
-   directories on the server.
-2. Relaunch `neurovla_baseline_libero_all_h100x8_bs8_ga1` as `junyu` and confirm
-   dataset construction, all eight ranks, the first optimizer step, and GPU
-   memory use.
+1. Done on 2026-08-01: `meta/modality.json` is installed in all four LeRobot
+   LIBERO subset directories on the server. All four datasets built cleanly.
+2. Relaunch `neurovla_baseline_libero_all_h100x8_bs8_ga1` as `junyu` after
+   pulling the W&B removal, and confirm dataset construction, all eight ranks,
+   the first optimizer step, and GPU memory use. Watch progress with
+   `tail -f results/training/<run-id>/metrics.jsonl`; there is no dashboard.
 3. Let the baseline reach step 50,000; the sequential cloud command then starts
    `neurovla_3d_mix_libero_all_h100x8_bs8_ga1`.
 4. Confirm the 3D-MIX run completes its first step at batch 8. If it OOMs, stop

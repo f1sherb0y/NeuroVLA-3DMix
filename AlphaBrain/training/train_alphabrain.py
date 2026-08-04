@@ -32,7 +32,6 @@ _distutils_log.set_threshold(_distutils_log.WARN)
 # Third-Party Libraries
 import torch
 import torch.distributed as dist
-import wandb
 import yaml
 from accelerate import Accelerator, DeepSpeedPlugin, DistributedDataParallelKwargs
 from accelerate.logging import get_logger
@@ -321,8 +320,6 @@ class VLATrainer(TrainerUtils):
             self.vla_train_dataloader,
         )
 
-        self._init_wandb()
-
         # Initialize EMA after distributed setup
         if self.use_ema and self.accelerator.is_main_process:
             logger.info(f"[EMA] Initializing EMA with decay={self.ema_decay}")
@@ -355,33 +352,6 @@ class VLATrainer(TrainerUtils):
             * self.accelerator.num_processes
             * self.accelerator.gradient_accumulation_steps
         )
-
-    def _init_wandb(self):
-        """initialize Weights & Biases"""
-        wandb_mode = getattr(self.config, 'wandb_mode', None) or getattr(getattr(self.config, 'environment', None), 'wandb_mode', None) or os.environ.get('WANDB_MODE', 'online')
-        if wandb_mode == 'disabled':
-            os.environ['WANDB_MODE'] = 'disabled'
-            return
-        if self.accelerator.is_main_process:
-            # Support both nested (environment.wandb_project) and flat (wandb_project) config layouts
-            if hasattr(self.config, 'environment') and self.config.environment is not None:
-                wandb_project = self.config.environment.wandb_project
-                wandb_entity = self.config.environment.wandb_entity
-                wandb_base_url = getattr(self.config.environment, 'wandb_base_url', None)
-            else:
-                wandb_project = getattr(self.config, 'wandb_project', 'vla-engine')
-                wandb_entity = getattr(self.config, 'wandb_entity', '')
-                wandb_base_url = getattr(self.config, 'wandb_base_url', None)
-            # Set proxy/mirror base URL if configured
-            if wandb_base_url:
-                os.environ["WANDB_BASE_URL"] = wandb_base_url
-            wandb.init(
-                name=self.config.run_id,
-                dir=os.path.join(self.config.output_dir, "wandb"),
-                project=wandb_project,
-                entity=wandb_entity or None,
-                group="vla-train",
-            )
 
     def _load_pretrained_dispatch(self, model, checkpoint_path, reload_modules=None):
         """
@@ -786,10 +756,6 @@ class VLATrainer(TrainerUtils):
                 # add step info
                 metrics["step"] = self.completed_steps
 
-                # record to W&B
-                if wandb.run is not None:
-                    wandb.log(metrics, step=self.completed_steps)
-
                 # record to local metrics.jsonl
                 metrics_file = os.path.join(self.config.output_dir, "metrics.jsonl")
                 with open(metrics_file, "a") as f:
@@ -1030,8 +996,6 @@ class VLATrainer(TrainerUtils):
                 os.makedirs(final_path, exist_ok=True)
                 self._save_lora_checkpoint(os.path.join(final_path, "final"))
                 logger.info(f"LoRA training complete. Final model saved at {final_path}")
-                if self.accelerator.is_main_process:
-                    wandb.finish()
                 self.accelerator.wait_for_everyone()
                 return
 
@@ -1096,10 +1060,6 @@ class VLATrainer(TrainerUtils):
                 logger.info(f"Saved PaliGemma config + processor to {paligemma_pretrained_dir}")
 
             logger.info(f"[lpt0309] Training complete. Self-contained final model saved at {final_checkpoint}")
-
-        # close W&B
-        if self.accelerator.is_main_process:
-            wandb.finish()
 
         self.accelerator.wait_for_everyone()
 
