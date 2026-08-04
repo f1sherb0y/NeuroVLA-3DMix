@@ -1,6 +1,6 @@
 # NeuroVLA-3DMix Project Handoff
 
-Last updated: 2026-07-29 (Asia/Shanghai)
+Last updated: 2026-07-30 (Asia/Shanghai)
 
 This document records the working context for the NeuroVLA-3DMix project: the
 research objective, the verified NeuroVLA architecture, environment and
@@ -16,9 +16,10 @@ The primary goal is a controlled comparison between:
    frozen VGGT-1B geometry encoder.
 
 Both models should use the same LIBERO data mixture, action objective, training
-schedule, hardware allocation, and evaluation protocol. The intended experiment
-is to train both variants with the same four-GPU recipe, evaluate both over all
-four LIBERO suites, and compare success rates.
+schedule, hardware allocation, and evaluation protocol. The active experiment
+trains both variants on one 8 x H100 node with per-device batch 8, gradient
+accumulation 1, global batch 64, and 50,000 optimizer steps, then evaluates both
+over all four LIBERO suites.
 
 The user does not train or evaluate NeuroVLA on the local workstation. The
 local machine is used for code inspection, unit tests, environment installation,
@@ -36,7 +37,7 @@ with online STDP disabled unless the user explicitly requests an STDP study.
 - Branch: `main`
 - Remote name: `origin`
 - Local workspace: `/home/fish/Documents/ncrc/NeuroVLA-VGGT`
-- Current handoff base commit: `09d96ae`
+- Current handoff base commit: `076ceeb`
 - Current server checkout used by the user: `/home/junyu/NeuroVLA-3DMix`
 - Server account that owns Conda, models, and results: `junyu`
 
@@ -53,6 +54,8 @@ Important commits, oldest to newest:
 | `9fd5e52` | Add the VGGT-backed NeuroVLA3DMix architecture and recipe |
 | `84b2bee` | Simplify 3D-MIX to the direct paper path and remove defensive branches |
 | `09d96ae` | Fix EGL logical-device mapping for multi-GPU evaluation |
+| `9f39a09` | Document the NeuroVLA-3DMix project handoff |
+| `076ceeb` | Correct Q-Former padding masks and extend them for 3D-MIX tokens |
 
 Before starting new work, run:
 
@@ -77,8 +80,11 @@ repository:
 - `../papers/VGGT/vggt`
 
 The official 3D-MIX source repository was not available during implementation.
-The implementation was checked against the paper equations, the local
-integration proposal, and the official VGGT source checkout.
+The paper's advertised `ZGC-EmbodyAI/3DMix-for-VLA` URL still returned 404 on
+2026-07-30 and was absent from the organization's public repository list. The
+implementation was checked against the paper equations, the local integration
+proposal, and the official VGGT source checkout; exact unreleased-code parity
+cannot be claimed.
 
 Pinned external revisions:
 
@@ -160,16 +166,18 @@ Its recorded training metadata says:
 | --- | --- |
 | Run ID | `0421-NeuroVLA-All4Suite-bs16-sdpa` |
 | Dataset mix | `libero_all` |
-| GPUs | 2 |
+| GPUs | 2 in the model card/config; 4 in the later `resume_meta.json` |
 | Per-device batch | 16 |
 | Gradient accumulation | 1 |
 | Steps | 50,000 |
+| R-STDP steps | 0 |
 | Attention | SDPA |
 
-This is not the same global-batch setup as the colleague's later H100x4,
-batch-8, GA2 command. The published checkpoint is used as the existing baseline
-for evaluation; the colleague recipe is the matched schedule intended for new
-baseline and 3D-MIX training runs.
+The GPU metadata is internally inconsistent, but every source agrees on 50,000
+supervised-backprop steps and no R-STDP phase. The published checkpoint is used
+as the existing evaluation baseline. The active newly trained comparison uses
+global batch 64 on 8 H100s for both baseline and 3D-MIX; this preserves the
+colleague recipe's `4 x 8 x GA2 = 64` effective batch as `8 x 8 x GA1 = 64`.
 
 ## 5. NeuroVLA architecture
 
@@ -314,6 +322,21 @@ The MUJOCO_EGL_DEVICE_ID environment variable must be an integer between 0 and 0
 `run_eval_libero.sh` now always uses `MUJOCO_EGL_DEVICE_ID=0` after isolating a
 worker's physical GPU.
 
+### 6.10 Q-Former conditioning masks were invalid and unused
+
+The Q-Former previously expanded a `[B, L]` mask to `[B, 1, L]`, which
+`nn.MultiheadAttention` rejects for `key_padding_mask`, and passed the keep-mask
+with the opposite boolean polarity. Baseline NeuroVLA also did not forward the
+Qwen attention mask to the Q-Former. Commit `076ceeb` now:
+
+- passes a two-dimensional key-padding mask;
+- inverts Qwen's `1 = visible` convention to PyTorch's `True = ignore`;
+- forwards the original semantic mask in baseline NeuroVLA; and
+- appends visible mask entries for every 3D-MIX geometry token.
+
+Single-sample inference without padding is unchanged. Batched training now
+excludes left-padding states while retaining every appended geometry token.
+
 ## 7. NeuroVLA3DMix architecture
 
 The new variant is implemented in:
@@ -359,9 +382,12 @@ s_global = masked_mean(H)
 g = sigmoid(W_gate [s_global; F_geo])
 F_fused = g * W_s(s_global) + (1 - g) * W_g(F_geo)
 H_cond = [H; F_fused]
+M_cond = [M_qwen; 1_N]
 ```
 
-`H_cond` replaces `H` only as input to the existing Layerwise Q-Former.
+`H_cond` replaces `H` only as input to the existing Layerwise Q-Former. The
+matching conditioning mask excludes Qwen padding and marks all `N` appended
+geometry tokens as visible.
 
 The code supports one fusion layer per selected Qwen layer. The current
 NeuroVLA config selects only layer 36, so the current experiment has one gated
@@ -456,7 +482,7 @@ NeuroVLA3DMix model, or running full policy evaluation.
 
 ## 9. Model and dataset locations
 
-Recommended portable server layout under the owning user's home:
+Confirmed training-server layout under `/home/junyu`:
 
 ```text
 $HOME/
@@ -465,17 +491,27 @@ $HOME/
     Qwen2.5-VL-3B-Instruct/
     VGGT-1B/
     neurovla-libero-all4suite/
+  datasets/libero/
+    libero_goal_no_noops_1.0.0_lerobot/
+    libero_10_no_noops_1.0.0_lerobot/
+    libero_object_no_noops_1.0.0_lerobot/
+    libero_spatial_no_noops_1.0.0_lerobot/
 ```
 
-Required environment variables for training:
+Required environment variables for the active training run:
 
 ```bash
+export CONDA_ENV=neurovla
+export NO_ALBUMENTATIONS_UPDATE=1
 export PRETRAINED_MODELS_DIR="$HOME/models"
 export VGGT_MODEL_PATH="$HOME/models/VGGT-1B"
-export LEROBOT_LIBERO_DATA_DIR=/absolute/path/to/lerobot/libero/data
-export CONFIG_YAML=configs/finetune_config_ga2.yaml
-export CONDA_ENV=neurovla
+export LEROBOT_LIBERO_DATA_DIR="$HOME/datasets/libero"
 ```
+
+The launch wrapper already defaults to `configs/finetune_config.yaml`,
+`configs/deepspeed/accelerate_zero2.yaml`, and process port 29500. No NCCL
+InfiniBand overrides or explicit `MAIN_PROCESS_PORT` are required for the
+single-node 8-H100 job.
 
 `PRETRAINED_MODELS_DIR` must contain `Qwen2.5-VL-3B-Instruct/`. The config
 builder joins those two components when resolving the baseline Qwen model.
@@ -495,6 +531,8 @@ bash scripts/download_neurovla_checkpoint.sh --models-dir "$HOME/models"
 Training data and native LIBERO simulator assets are different things:
 
 - `LEROBOT_LIBERO_DATA_DIR` points to LeRobot-format training datasets.
+- Every downloaded training subset must contain `meta/modality.json`; the
+  canonical file is `benchmarks/LIBERO/train/modality.json`.
 - `LIBERO_HOME` points to the pinned simulator source and its BDDL/init/assets.
 - `.env.libero` is generated for evaluation and should not be committed.
 
@@ -518,29 +556,35 @@ bash scripts/run_brain_inspired_scripts/run_neurovla_pretrain.sh \
     --run-id neurovla_pretrain_libero_all_h100x4_bs8_ga2
 ```
 
-Do not copy the hard-coded home paths or old environment name. The equivalent
-current recipe is:
+Do not copy the hard-coded home paths or old environment name. On the active
+8-H100 server, preserve the historical global batch of 64 by replacing
+`4 x batch 8 x GA2` with `8 x batch 8 x GA1`. The active baseline launch is:
 
 ```bash
-export CONFIG_YAML=configs/finetune_config_ga2.yaml
 export CONDA_ENV=neurovla
+export NO_ALBUMENTATIONS_UPDATE=1
+export PRETRAINED_MODELS_DIR="$HOME/models"
+export VGGT_MODEL_PATH="$HOME/models/VGGT-1B"
+export LEROBOT_LIBERO_DATA_DIR="$HOME/datasets/libero"
 
 bash scripts/run_brain_inspired_scripts/run_neurovla_pretrain.sh \
     --dataset libero_all \
-    --gpus 4 \
+    --gpus 8 \
     --batch-size 8 \
     --steps 50000 \
-    --run-id neurovla_pretrain_libero_all_h100x4_bs8_ga2
+    --run-id neurovla_baseline_libero_all_h100x8_bs8_ga1
 ```
 
-The GA2 mode resolves to:
+The active recipe resolves to:
 
 | Setting | Value |
 | --- | ---: |
-| GPUs | 4 |
+| GPUs | 8 |
 | Per-device batch | 8 |
-| Gradient accumulation | 2 |
+| Gradient accumulation | 1 |
+| Effective global batch | 64 |
 | Steps | 50,000 |
+| Visible training samples | 3.2 million |
 | Save interval | 10,000 |
 | Attention implementation | SDPA |
 | Base LR | `2.5e-5` |
@@ -559,19 +603,15 @@ results/training/<run-id>/checkpoints/steps_<N>/
 
 ## 11. NeuroVLA3DMix training workflow
 
-Use the same GA2 schedule as the baseline and change only the model mode:
+Use the same 8-H100 schedule and change only the model launcher:
 
 ```bash
-export CONFIG_YAML=configs/finetune_config_ga2.yaml
-export CONDA_ENV=neurovla
-export VGGT_MODEL_PATH="$HOME/models/VGGT-1B"
-
 bash scripts/run_brain_inspired_scripts/run_neurovla_3d_mix_pretrain.sh \
     --dataset libero_all \
-    --gpus 4 \
+    --gpus 8 \
     --batch-size 8 \
     --steps 50000 \
-    --run-id neurovla_3d_mix_libero_all_h100x4_bs8_ga2
+    --run-id neurovla_3d_mix_libero_all_h100x8_bs8_ga1
 ```
 
 The 3D-MIX mode adds only:
@@ -581,11 +621,53 @@ The 3D-MIX mode adds only:
 - `three_d_mix` optimizer group at LR `1.0e-4`
 - frozen VGGT feature extraction and gated fusion
 
-VGGT adds roughly 1.26B frozen parameters and substantial inference compute.
-The four-H100 batch-8 recipe has not yet been proven by an actual 3D-MIX
-training run. If it does not fit, reduce per-device batch and increase gradient
-accumulation so the effective batch remains constant. Record any such change;
-it becomes part of the comparison protocol.
+VGGT adds roughly 1.26B frozen parameters and substantial compute. The
+8-H100 batch-8 run has not yet completed a real model step. If it runs out of
+memory, switch both experiments to `configs/finetune_config_ga2.yaml` with
+per-device batch 4, preserving `8 x 4 x GA2 = 64`. Record any recipe change.
+
+### 11.1 Training checkpoint and resume behavior
+
+The training wrappers are not automatically resumable. Current defaults are:
+
+```text
+trainer.is_resume = false
+trainer.save_training_state = false
+```
+
+Re-running the same command and run ID therefore starts from step 0. Each
+10,000-step checkpoint contains model weights and `resume_meta.json`, but no
+optimizer, scheduler, or RNG state. The trainer contains opt-in warm/full resume
+code, but the shell wrappers expose no `--resume` flag and the full-state path
+has not been validated for these models. Do not rely on automatic recovery from
+a preempted cloud task without implementing and testing it first.
+
+### 11.2 First 8-H100 training launch incident
+
+On 2026-07-30 the baseline launch reached dataset construction on all eight
+ranks and failed before step 0 because the downloaded LeRobot subsets lacked
+AlphaBrain's required `meta/modality.json`. The first reported path was:
+
+```text
+$HOME/datasets/libero/libero_object_no_noops_1.0.0_lerobot/meta/modality.json
+```
+
+This was a data-preparation issue, not a model, DeepSpeed, NCCL, or GPU failure.
+Repair all four subsets once with:
+
+```bash
+cd "$HOME/NeuroVLA-3DMix"
+for suite in spatial object goal 10; do
+    install -D -m 0644 \
+        benchmarks/LIBERO/train/modality.json \
+        "$HOME/datasets/libero/libero_${suite}_no_noops_1.0.0_lerobot/meta/modality.json"
+done
+```
+
+Albumentations version-check warnings caused by the server's blocked outbound
+network are non-fatal. Set `NO_ALBUMENTATIONS_UPDATE=1` to suppress them. No
+checkpoint or training progress was produced by this failed launch, so the same
+run ID can be reused after repairing the metadata.
 
 ## 12. Evaluation workflow
 
@@ -745,7 +827,7 @@ is the saved framework name.
 
 ```bash
 python scripts/run_brain_inspired_scripts/run_eval_libero_multi_gpu.py \
-    --pretrained results/training/neurovla_3d_mix_libero_all_h100x4_bs8_ga2/checkpoints/steps_50000 \
+    --pretrained results/training/neurovla_3d_mix_libero_all_h100x8_bs8_ga1/checkpoints/steps_50000 \
     --suite all \
     --trials 50 \
     --gpus 0,1,2,3,4,5,6,7 \
@@ -772,6 +854,8 @@ The following checks have passed locally:
 - official VGGT downloader dry run and streamed-output behavior
 - official checkpoint tensor inspection
 - Q-Former gradient scaling numerical test
+- Q-Former padding-mask shape, polarity, and masked-value invariance test
+- 3D-MIX conditioning-mask extension shape test
 - 3D-MIX gate equation numerical test
 - VGGT aspect-pad preprocessing test
 - self-contained VGGT checkpoint skeleton test
@@ -812,6 +896,8 @@ What has not been tested locally:
 - Do not silently pool geometry tokens; the implemented experiment uses all
   2,738 tokens.
 - Keep Qwen gradient scaling separate from 3D-MIX parameter gradients.
+- Preserve Qwen padding masks in baseline Q-Former conditioning and append
+  visible mask entries for every 3D-MIX token.
 - Preserve self-contained checkpoint loading.
 - Do not hard-code another user's home directory in project scripts.
 - Use `runuser` when a root-owned task launcher must execute work in the user's
@@ -821,19 +907,21 @@ What has not been tested locally:
 
 ## 18. Immediate next actions
 
-1. Pull `main` on the server and rerun the official baseline evaluation using
-   `runuser`, the fixed EGL mapping, and a new output directory.
-2. Verify all eight shard logs are active and each header reports its physical
-   GPU plus `EGL device: 0`.
-3. Confirm the final root `eval_results.json` contains 2,000 episodes and save
-   per-suite baseline success rates.
-4. Confirm Qwen, VGGT, and LeRobot LIBERO dataset paths on the training server.
-5. Launch the four-GPU baseline training recipe if a newly trained baseline is
-   required for the comparison.
-6. Launch the matching four-GPU NeuroVLA3DMix training recipe.
-7. Evaluate both resulting step-50,000 checkpoints with the same 50-trial,
-   four-suite protocol.
-8. Compare overall, per-suite, and per-task success rates. Record hardware,
+1. Install and verify `meta/modality.json` in all four LeRobot LIBERO subset
+   directories on the server.
+2. Relaunch `neurovla_baseline_libero_all_h100x8_bs8_ga1` as `junyu` and confirm
+   dataset construction, all eight ranks, the first optimizer step, and GPU
+   memory use.
+3. Let the baseline reach step 50,000; the sequential cloud command then starts
+   `neurovla_3d_mix_libero_all_h100x8_bs8_ga1`.
+4. Confirm the 3D-MIX run completes its first step at batch 8. If it OOMs, stop
+   and relaunch both controlled runs with batch 4 and GA2 rather than changing
+   only one side.
+5. Evaluate both resulting step-50,000 checkpoints with the same 50-trial,
+   four-suite protocol and online STDP disabled.
+6. Rerun the official baseline checkpoint evaluation with the fixed EGL mapping
+   when needed for the published-checkpoint reference result.
+7. Compare overall, per-suite, and per-task success rates. Record hardware,
    batch, gradient accumulation, seed, checkpoint, code commit, and wall time.
 
 Do not change the 3D-MIX architecture again until the user provides further
