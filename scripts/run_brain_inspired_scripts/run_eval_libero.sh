@@ -77,11 +77,16 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-$PROJECT_ROOT/.libero}"
 }
 
 MUJOCO_GL="${MUJOCO_GL:-egl}"
-# CUDA_VISIBLE_DEVICES exposes one physical GPU as logical device 0.
-MUJOCO_EGL_DEVICE_ID=0
+# MUJOCO_EGL_DEVICE_ID is deliberately left unset. CUDA_VISIBLE_DEVICES already
+# isolates one GPU and EGL enumerates only that device, so MuJoCo's default of
+# taking the first device that initializes selects the correct one. Setting the
+# variable cannot work for either candidate value: robosuite asserts it is a
+# substring of CUDA_VISIBLE_DEVICES (the physical ID), while MuJoCo indexes it
+# into the post-isolation device list of length one.
+unset MUJOCO_EGL_DEVICE_ID
 
 export CUDA_VISIBLE_DEVICES="$GPU"
-export LIBERO_HOME LIBERO_CONFIG_PATH MUJOCO_GL MUJOCO_EGL_DEVICE_ID
+export LIBERO_HOME LIBERO_CONFIG_PATH MUJOCO_GL
 export PYTHONPATH="${PROJECT_ROOT}:${LIBERO_HOME}${PYTHONPATH:+:$PYTHONPATH}"
 
 # Resolve one concrete interpreter up front. This works for Conda installations
@@ -117,7 +122,7 @@ for S in "${SUITES[@]}"; do
     echo "  Trials/task:  $TRIALS"
     echo "  Task IDs:     ${TASK_IDS:-all}"
     echo "  GPU:          $GPU"
-    echo "  EGL device:   $MUJOCO_EGL_DEVICE_ID"
+    echo "  EGL device:   auto (CUDA-isolated)"
     echo "  Online STDP:  $ONLINE_STDP"
     echo "  Output:       $OUT_DIR"
     echo "=============================================="

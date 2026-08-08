@@ -73,12 +73,6 @@ class LiberoSetupTests(unittest.TestCase):
                 env=os.environ.copy(),
             )
 
-    def test_eval_uses_logical_egl_device_zero(self):
-        script = (
-            PROJECT_ROOT / "scripts" / "run_brain_inspired_scripts" / "run_eval_libero.sh"
-        ).read_text(encoding="utf-8")
-        self.assertIn("MUJOCO_EGL_DEVICE_ID=0", script)
-
     def test_checkpoint_download_dry_run_uses_home_models_without_writes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env = os.environ.copy()
